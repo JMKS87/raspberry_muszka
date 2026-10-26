@@ -1,0 +1,48 @@
+services:
+  muszka:
+    image: ${LLAMA_CPP_IMAGE:-ghcr.io/ggml-org/llama.cpp:server}
+    container_name: muszka
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${MUSZKA_PORT:-8080}:8080"
+    volumes:
+      - ./models:/models:ro
+    environment:
+      MODEL_FILE: ${MODEL_FILE:-muszka-instruct-1.5b-v1.0-Q6_K.gguf}
+      API_KEY: ${API_KEY:-}
+      THREADS: ${THREADS:-2}
+      PARALLEL: ${PARALLEL:-2}
+      CTX_PER_SLOT: ${CTX_PER_SLOT:-8192}
+      TEMPERATURE: ${TEMPERATURE:-0.2}
+      TOP_P: ${TOP_P:-0.9}
+      REPEAT_PENALTY: ${REPEAT_PENALTY:-1.05}
+    # llama-server dzieli -c (kontekst całkowity) równo między sloty,
+    # więc liczymy CTX_PER_SLOT * PARALLEL. "$$" = zmienna rozwijana w kontenerze.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -n "$$API_KEY" ]; then export LLAMA_API_KEY="$$API_KEY"; fi
+        unset API_KEY
+        exec /app/llama-server \
+          --model "/models/$$MODEL_FILE" \
+          --host 0.0.0.0 --port 8080 \
+          --threads "$$THREADS" \
+          --parallel "$$PARALLEL" \
+          --ctx-size "$$(( CTX_PER_SLOT * PARALLEL ))" \
+          --jinja \
+          --temp "$$TEMPERATURE" \
+          --top-p "$$TOP_P" \
+          --repeat-penalty "$$REPEAT_PENALTY" \
+          --alias muszka-instruct
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    mem_limit: ${MEM_LIMIT:-4g}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

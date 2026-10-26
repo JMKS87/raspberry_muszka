@@ -1,0 +1,3 @@
+# Skrypty i pliki konfiguracyjne muszą mieć końce linii LF (uruchamiane na Linuksie)
+* text=auto eol=lf
+*.gguf binary
